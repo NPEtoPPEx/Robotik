@@ -9,7 +9,7 @@ try:
 except OSError as error: 
     print(error) 
 
-MY_IP = '192.168.2.211'
+MY_IP = '192.168.2.130'
 robot = wrapper.get_robot(MY_IP)
 robot.initiate_model()
 robot.init_camera("./img")
@@ -39,7 +39,7 @@ turningSteps = 1450	# 1300 was 2 turns
 greenBlockCenter = 0
 centerX = 80
 phase = 0	# 0 = Turn 360 , 1 Search Green Block , 2 Center Green Block 
-
+turn = False
 PID_MAX_DS = 0.5
 PID_WALL_TARGET = 100
 a = 4
@@ -151,17 +151,18 @@ while robot.go_on():
 			deltaSpeed = (MAX_SPEED - deltaOffset)/120
 			robot.set_speed(-deltaSpeed, deltaSpeed)
 			if(abs(centerX - greenBlockCenter) < 3):
+				robot.disable_camera
 				phase = 3
 	elif phase == 3:
 			ps_values = robot.get_calibrate_prox()
-			proxRight = (1* ps_values[0] + 0*ps_values[1] + 0 *ps_values[2] + 0*ps_values[3]) / 1
-			proxLeft = (1* ps_values[7] + 0*ps_values[6] + 0 *ps_values[5] + 0*ps_values[4]) / 1
-			dsL = (MAX_SPEED * proxLeft) / MAX_PROX
-			dsR = (MAX_SPEED * proxRight) / MAX_PROX
-			speedL = MAX_SPEED - dsL
-			speedR = MAX_SPEED - dsR
-			robot.set_speed(speedL, speedR)
-			if(proxRight > 150 and proxLeft > 150):
+			#proxRight = (1* ps_values[0] + 0*ps_values[1] + 0 *ps_values[2] + 0*ps_values[3]) / 1
+			#proxLeft = (1* ps_values[7] + 0*ps_values[6] + 0 *ps_values[5] + 0*ps_values[4]) / 1
+			#dsL = (MAX_SPEED * proxLeft) / MAX_PROX
+			#dsR = (MAX_SPEED * proxRight) / MAX_PROX
+			#speedL = MAX_SPEED - dsL
+			#speedR = MAX_SPEED - dsR
+			robot.set_speed(MAX_SPEED, MAX_SPEED)
+			if(ps_values[0] > 100 and ps_values[7] > 100):
 				phase = 4
 				step = 0;
 	elif phase == 4:   
@@ -171,24 +172,43 @@ while robot.go_on():
 		else:
 			phase = 5
 	elif phase == 5: 	
-		ps = robot.get_calibrate_prox()
-		proxR = (a * ps[0] + b * ps[1] + c * ps[2] + d * ps[3]) / (a+b+c+d);
+	
+			ps = robot.get_calibrate_prox()
+			proxR = (a * ps[0] + b * ps[1] + c * ps[2] + d * ps[3]) / (a+b+c+d);
                       
     # compute PID response according to IR sensor value
-		ds = pid.compute(proxR,PID_WALL_TARGET);      
-          
+			ds = pid.compute(proxR,PID_WALL_TARGET);      
     # make the robot turn towards the wall by default    
-		ds += .05
-
-		speedR = MAX_SPEED + ds
-		speedL = MAX_SPEED - ds
-    
-    	# "clamping" function for corners
-		if abs(ds) > PID_MAX_DS :
-			speedR = +ds
-			speedL = -ds
-    
-		robot.set_speed(speedL,speedR)		
-
+			ds += .05
+			speedR = MAX_SPEED + ds
+			speedL = MAX_SPEED - ds
+			if (ps[0] > 150 and ps[7] > 150):	
+				phase = 6
+				step = 0
+			robot.set_speed(speedL,speedR)
+	elif phase == 6:
+			if step < 250 :
+				robot.set_speed(-MAX_SPEED, MAX_SPEED)
+				step += 1	
+			else:
+				phase = 7
+	elif phase == 7:
+			ps = robot.get_calibrate_prox()
+			proxL = (a * ps[7] + b * ps[6] + c * ps[5] + d * ps[4]) / (a+b+c+d);
+                      
+    # compute PID response according to IR sensor value
+			ds = pid.compute(proxL,PID_WALL_TARGET);      
+    # make the robot turn towards the wall by default    
+			ds += .05
+			speedR = MAX_SPEED - ds
+			speedL = MAX_SPEED + ds
+			if (ps[0] > 100 and ps[7] > 100):	
+				phase = 8
+			robot.set_speed(speedL,speedR)
+	elif phase == 8:
+			robot.set_speed(-MAX_SPEED, MAX_SPEED)
+			print(robot.get_microphones())
+		
+		
 data.close()
 robot.clean_up()
